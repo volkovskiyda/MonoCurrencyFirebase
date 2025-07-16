@@ -1,0 +1,11 @@
+{
+  "projects": {
+    "default": "monocurrency"
+  },
+  "targets": {},
+  "etags": {
+    "monocurrency": {
+      "extensionInstances": {}
+    }
+  }
+}
