@@ -2,10 +2,13 @@ from firebase_functions import scheduler_fn
 from firebase_functions.options import set_global_options
 from firebase_admin import initialize_app
 from google.cloud import firestore
-import requests
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List
 from datetime import datetime
+import os, requests
+
+credentials = "firebase-key.json"
+if os.path.exists(credentials): os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials
 
 set_global_options(max_instances=3)
 

@@ -1,0 +1,55 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Google Application Credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > $HOME/firebase-key.json
+        shell: bash
+
+      - name: Copy credentials to functions directory
+        run: cp $HOME/firebase-key.json functions/firebase-key.json
+
+      - name: Create Python venv and install dependencies
+        run: |
+          cd functions
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+          deactivate
+        shell: bash
+
+      - name: Deploy to Firebase
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: firebase deploy --token "$FIREBASE_TOKEN" --non-interactive
+
+      - name: Remove credentials file
+        if: success() || failure()
+        run: rm $HOME/firebase-key.json functions/firebase-key.json
