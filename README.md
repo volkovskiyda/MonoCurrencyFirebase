@@ -11,3 +11,12 @@ firebase deploy
 ```bash
 firebase emulators:start
 ```
+
+### **Trigger Firebase Functions locally:**
+```bash
+firebase functions:shell
+```
+```bash
+firebase > populate_currencies()
+firebase > fetch_and_store_data()
+```
