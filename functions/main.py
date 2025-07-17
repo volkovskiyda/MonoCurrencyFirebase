@@ -33,21 +33,22 @@ class CurrencyRate:
     rateBuy: Optional[float] = None
     rateSell: Optional[float] = None
     rateCross: Optional[float] = None
-    timestamp: str = field(init=False)
+    timestamp: datetime = field(init=False)
 
     def __post_init__(self):
-        dt = datetime.fromtimestamp(self.date)
-        self.timestamp = dt.isoformat()
+        self.timestamp = datetime.fromtimestamp(self.date)
 
     def currencyA(self, currencies: list[Currency]) -> Optional[Currency]:
-        return next((c for c in currencies if c.number == str(self.currencyCodeA)), None)
+        return next((c for c in currencies if c.number == self.currencyCodeA), None)
 
     def currencyB(self, currencies: list[Currency]) -> Optional[Currency]:
-        return next((currency for currency in currencies if currency.number == str(self.currencyCodeB)), None)
+        return next((currency for currency in currencies if currency.number == self.currencyCodeB), None)
 
     def dict(self, currencies: list[Currency], requested: str = None) -> dict:
         d = asdict(self)
-        d.pop("rateCross", None)
+        if not self.rateBuy: d.pop("rateBuy", None)
+        if not self.rateSell: d.pop("rateSell", None)
+        if not self.rateCross: d.pop("rateCross", None)
         d["requested"] = requested
         currencyA = self.currencyA(currencies)
         currencyB = self.currencyB(currencies)
@@ -129,7 +130,7 @@ def fetch_currency_codes() -> List[Currency]:
             code = cols[2].strip()
             currency_name = cols[1].strip()
             if number and code and currency_name and number not in currencies:
-                currencies[number] = Currency(number=number, code=code, currency=currency_name)
+                currencies[number] = Currency(number=int(number), code=code, currency=currency_name)
     return list(currencies.values())
 
 def parse_currency_rates(json_data) -> List[CurrencyRate]:
