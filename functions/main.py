@@ -1,11 +1,11 @@
-from firebase_functions import scheduler_fn
+from firebase_functions import scheduler_fn, https_fn
 from firebase_functions.options import set_global_options
 from firebase_admin import initialize_app
 from google.cloud import firestore
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List
 from datetime import datetime
-import os, requests
+import os, requests, re, json
 
 credentials = "firebase-key.json"
 if os.path.exists(credentials): os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials
@@ -20,6 +20,13 @@ ENDPOINT = "https://api.monobank.ua/bank/currency"
 USD = 840
 EUR = 978
 UAH = 980
+CURRENCY_CODE_URL = "https://www.iban.com/currency-codes"
+
+@dataclass
+class Currency:
+    number: int
+    code: str
+    currency: str
 
 @dataclass
 class CurrencyRate:
@@ -40,6 +47,28 @@ class CurrencyRate:
         d.pop("rateCross", None)
         d["requested"] = requested
         return d
+
+@https_fn.on_request()
+def populate_currencies(request) -> https_fn.Response:
+    currencies = fetch_currency_codes()
+    batch = db.batch()
+
+    for currency in currencies:
+        batch.set(db.collection('currency').document(currency.code), asdict(currency))
+
+    try:
+        batch.commit()
+        return https_fn.Response(
+            json.dumps({"message": "Batch write completed successfully! All currencies added."}),
+            status=200,
+            content_type="application/json"
+        )
+    except Exception as e:
+        return https_fn.Response(
+            json.dumps({"error": f"An error occurred during batch write: {e}"}),
+            status=400,
+            content_type="application/json"
+        )
 
 @scheduler_fn.on_schedule(schedule="every 1 hours", timezone="Europe/Kyiv")
 def fetch_and_store_data(event):
@@ -81,6 +110,24 @@ def fetch_and_store_data(event):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
     print("Hourly data fetch completed.")
+
+def fetch_currency_codes() -> List[Currency]:
+    response = requests.get(CURRENCY_CODE_URL)
+    response.raise_for_status()
+    html = response.text
+
+    # Find the table rows using regex
+    rows = re.findall(r"<tr>(.*?)</tr>", html, re.DOTALL)
+    currencies = {}
+    for row in rows[1:]:  # Skip header
+        cols = re.findall(r"<td>(.*?)</td>", row, re.DOTALL)
+        if len(cols) >= 4:
+            number = cols[3].strip()
+            code = cols[2].strip()
+            currency_name = cols[1].strip()
+            if number and code and currency_name and number not in currencies:
+                currencies[number] = Currency(number=number, code=code, currency=currency_name)
+    return list(currencies.values())
 
 def parse_currency_rates(json_data: list) -> List[CurrencyRate]:
     allowed = {f.name for f in CurrencyRate.__dataclass_fields__.values()}
