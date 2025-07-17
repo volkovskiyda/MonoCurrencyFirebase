@@ -16,10 +16,7 @@ initialize_app()
 
 db = firestore.Client()
 
-ENDPOINT = "https://api.monobank.ua/bank/currency"
-USD = 840
-EUR = 978
-UAH = 980
+CURRENCY_RATE_URL = "https://api.monobank.ua/bank/currency"
 CURRENCY_CODE_URL = "https://www.iban.com/currency-codes"
 
 @dataclass
@@ -42,10 +39,21 @@ class CurrencyRate:
         dt = datetime.fromtimestamp(self.date)
         self.timestamp = dt.isoformat()
 
-    def dict(self, requested: str = None) -> dict:
+    def currencyA(self, currencies: list[Currency]) -> Optional[Currency]:
+        return next((c for c in currencies if c.number == str(self.currencyCodeA)), None)
+
+    def currencyB(self, currencies: list[Currency]) -> Optional[Currency]:
+        return next((currency for currency in currencies if currency.number == str(self.currencyCodeB)), None)
+
+    def dict(self, currencies: list[Currency], requested: str = None) -> dict:
         d = asdict(self)
         d.pop("rateCross", None)
         d["requested"] = requested
+        currencyA = self.currencyA(currencies)
+        currencyB = self.currencyB(currencies)
+        if currencyA is not None and currencyB is not None:
+            d["currencyA"] = currencyA.code
+            d["currencyB"] = currencyB.code
         return d
 
 @https_fn.on_request()
@@ -74,36 +82,31 @@ def populate_currencies(request) -> https_fn.Response:
 def fetch_and_store_data(event):
     print(f"[{datetime.now()}] Starting hourly data fetch...")
     try:
-        print(f"Calling endpoint: {ENDPOINT}")
-        response = requests.get(ENDPOINT)
+        print(f"Calling endpoint: {CURRENCY_RATE_URL}")
+        response = requests.get(CURRENCY_RATE_URL)
         response.raise_for_status()
+        currencies = [Currency(**currency.to_dict()) for currency in db.collection("currency").stream()]
         if response.status_code == 200:
             json = response.json()
             currency_rates = parse_currency_rates(json)
-            usd_uah = get_usd_rate(currency_rates)
-            eur_uah = get_eur_rate(currency_rates)
-            eur_usd = get_eur_usd_rate(currency_rates)
-            print(f"USD-UAH Rate: {usd_uah}")
-            print(f"EUR-UAH Rate: {eur_uah}")
-            print(f"EUR-USD Rate: {eur_usd}")
+            print(f"USD-UAH Rate: {get_rate_by_code(currency_rates, currencies, "USD", "UAH")}")
+            print(f"EUR-UAH Rate: {get_rate_by_code(currency_rates, currencies, "EUR", "UAH")}")
+            print(f"EUR-USD Rate: {get_rate_by_code(currency_rates, currencies, "EUR", "USD")}")
         else:
             print(f"Request failed with status code {response.status_code}")
 
         now = datetime.now()
         daytime_str = now.strftime("%Y%m%d_%H%M%S")
         day_str = now.strftime("%Y%m%d")
-        usd_uah = usd_uah.dict(now)
-        eur_uah = eur_uah.dict(now)
-        eur_usd = eur_usd.dict(now)
-        db.collection("currency").document("usd_uah").set(usd_uah)
-        db.collection("currency").document("eur_uah").set(eur_uah)
-        db.collection("currency").document("eur_usd").set(eur_usd)
-        db.collection("currency", "usd_uah", day_str).add(usd_uah, daytime_str)
-        db.collection("currency", "eur_uah", day_str).add(eur_uah, daytime_str)
-        db.collection("currency", "eur_usd", day_str).add(eur_usd, daytime_str)
-        db.collection("currency", "usd_uah", day_str).document(day_str).set(usd_uah)
-        db.collection("currency", "eur_uah", day_str).document(day_str).set(eur_uah)
-        db.collection("currency", "eur_usd", day_str).document(day_str).set(eur_usd)
+        for currency_rate in currency_rates:
+            currency_rate_dict = currency_rate.dict(currencies, now)
+            currencyA = currency_rate.currencyA(currencies)
+            currencyB = currency_rate.currencyB(currencies)
+            if currencyA is None or currencyB is None: continue
+            document_id = f"{currencyA.code}_{currencyB.code}"
+            db.collection("rate").document(document_id).set(currency_rate_dict)
+            db.collection("rate", document_id, day_str).add(currency_rate_dict, daytime_str)
+            db.collection("rate", document_id, day_str).document(day_str).set(currency_rate_dict)
         print("Data successfully stored in Firestore at ", now)
     except requests.exceptions.RequestException as e:
         print(f"Error making HTTP request: {e}")
@@ -129,23 +132,20 @@ def fetch_currency_codes() -> List[Currency]:
                 currencies[number] = Currency(number=number, code=code, currency=currency_name)
     return list(currencies.values())
 
-def parse_currency_rates(json_data: list) -> List[CurrencyRate]:
-    allowed = {f.name for f in CurrencyRate.__dataclass_fields__.values()}
+def parse_currency_rates(json_data) -> List[CurrencyRate]:
+    allowed = {field.name for field in CurrencyRate.__dataclass_fields__.values()}
     return [
         CurrencyRate(**{k: v for k, v in item.items() if k in allowed})
         for item in json_data
     ]
 
-def get_usd_rate(rates: List[CurrencyRate]) -> Optional[CurrencyRate]:
-    return get_rate(rates, USD, UAH)
+def get_rate_by_code(rates: List[CurrencyRate], currencies: List[Currency], currencyA: str, currencyB: str) -> Optional[CurrencyRate]:
+    currencyCodeA = next((c.number for c in currencies if c.code == currencyA), None)
+    currencyCodeB = next((c.number for c in currencies if c.code == currencyB), None)
+    if currencyCodeA is None or currencyCodeB is None: return None
+    return get_rate_by_number(rates, int(currencyCodeA), int(currencyCodeB))
 
-def get_eur_rate(rates: List[CurrencyRate]) -> Optional[CurrencyRate]:
-    return get_rate(rates, EUR, UAH)
-
-def get_eur_usd_rate(rates: List[CurrencyRate]) -> Optional[CurrencyRate]:
-    return get_rate(rates, EUR, USD)
-
-def get_rate(rates: List[CurrencyRate], codeA: int, codeB: int) -> Optional[CurrencyRate]:
+def get_rate_by_number(rates: List[CurrencyRate], currencyCodeA: int, currencyCodeB: int) -> Optional[CurrencyRate]:
     return next(
-        (rate for rate in rates if rate.currencyCodeA == codeA and rate.currencyCodeB == codeB), None
+        (rate for rate in rates if rate.currencyCodeA == currencyCodeA and rate.currencyCodeB == currencyCodeB), None
     )
