@@ -23,7 +23,7 @@
             text-align: center;
         }
         button {
-            background-color: #4285F4; /* Google Blue */
+            background-color: #4285F4;
             color: white;
             border: none;
             padding: 12px 20px;
@@ -45,13 +45,13 @@
             border-radius: 5px;
             background-color: #e9ecef;
             text-align: left;
-            word-break: break-all; /* For long UIDs/emails */
+            word-break: break-all;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Welcome to My App!</h1>
+        <h1>Welcome to Mono Currency App!</h1>
         <button id="google-sign-in-button">
             <img src="https://img.icons8.com/color/16/000000/google-logo.png" alt="Google icon">
             Sign in with Google
@@ -66,13 +66,8 @@
         <p id="error-message" style="color: red; display: none;"></p>
     </div>
 
-    <!-- Firebase SDKs - make sure these are correct for your project -->
-    <!-- You will need to install Firebase JS SDK via npm or use a CDN -->
-    <!-- For simplicity, we'll use CDN for this example. -->
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-
-    <!-- Your custom JavaScript file -->
     <script src="./app.js"></script>
 </body>
 </html>
