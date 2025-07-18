@@ -84,7 +84,7 @@ def store_currencies(currencies: List[Currency]) -> None:
     batch.commit()
     
 
-@scheduler_fn.on_schedule(schedule="every 1 hours", timezone="Europe/Kyiv")
+@scheduler_fn.on_schedule(schedule="0 * * * *", timezone="Europe/Kyiv")
 def fetch_and_store_data(event):
     print(f"[{datetime.now()}] Starting hourly data fetch...")
     try:
