@@ -140,15 +140,17 @@ def fetch_and_store_data(event):
         now = datetime.now()
         daytime_str = now.strftime("%Y%m%d_%H%M%S")
         day_str = now.strftime("%Y%m%d")
+        batch = db.batch()
         for currency_rate in currency_rates:
             currency_rate_dict = currency_rate.dict(currencies, now)
             currencyA = currency_rate.currencyA(currencies)
             currencyB = currency_rate.currencyB(currencies)
             if currencyA is None or currencyB is None: continue
             document_id = f"{currencyA.code}_{currencyB.code}"
-            db.collection("rate").document(document_id).set(currency_rate_dict)
-            db.collection("rate", document_id, day_str).add(currency_rate_dict, daytime_str)
-            db.collection("rate", document_id, day_str).document(day_str).set(currency_rate_dict)
+            batch.set(db.collection("rate").document(document_id), currency_rate_dict)
+            batch.set(db.collection("rate", document_id, day_str).document(daytime_str), currency_rate_dict)
+            batch.set(db.collection("rate", document_id, day_str).document(day_str), currency_rate_dict)
+        batch.commit()
         print("Data successfully stored in Firestore at ", now)
     except requests.exceptions.RequestException as e:
         print(f"Error making HTTP request: {e}")
