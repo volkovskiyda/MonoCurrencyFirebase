@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, List
 from datetime import datetime
 import os, requests, re, json
+from firebase_admin import auth
 
 credentials = "firebase-key.json"
 if os.path.exists(credentials): os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials
@@ -59,6 +60,31 @@ class CurrencyRate:
 
 @https_fn.on_request()
 def populate_currencies(request) -> https_fn.Response:
+    id_token = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        id_token = auth_header.split("Bearer ")[1]
+    if not id_token:
+        return https_fn.Response(
+            json.dumps({"error": "Missing or invalid Authorization header"}),
+            status=401,
+            content_type="application/json"
+        )
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        if not decoded_token.get("admin", False):
+            return https_fn.Response(
+                json.dumps({"error": "User is not authorized (admin only)"}),
+                status=403,
+                content_type="application/json"
+            )
+    except Exception as e:
+        return https_fn.Response(
+            json.dumps({"error": f"Authentication failed: {e}"}),
+            status=401,
+            content_type="application/json"
+        )
+
     currencies = fetch_currency_codes()
     try:
         store_currencies(currencies)
