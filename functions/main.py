@@ -60,13 +60,8 @@ class CurrencyRate:
 @https_fn.on_request()
 def populate_currencies(request) -> https_fn.Response:
     currencies = fetch_currency_codes()
-    batch = db.batch()
-
-    for currency in currencies:
-        batch.set(db.collection('currency').document(currency.code), asdict(currency))
-
     try:
-        batch.commit()
+        store_currencies(currencies)
         return https_fn.Response(
             json.dumps({"message": "Batch write completed successfully! All currencies added."}),
             status=200,
@@ -78,15 +73,35 @@ def populate_currencies(request) -> https_fn.Response:
             status=400,
             content_type="application/json"
         )
+    
+    
+def store_currencies(currencies: List[Currency]) -> None:
+    batch = db.batch()
+
+    for currency in currencies:
+        batch.set(db.collection('currency').document(currency.code), asdict(currency))
+
+    batch.commit()
+    
 
 @scheduler_fn.on_schedule(schedule="every 1 hours", timezone="Europe/Kyiv")
 def fetch_and_store_data(event):
     print(f"[{datetime.now()}] Starting hourly data fetch...")
     try:
+        currencies = [Currency(**currency.to_dict()) for currency in db.collection("currency").stream()]
+        if not currencies:
+            print("No currencies found in Firestore. Fetching currency codes...")
+            currencies = fetch_currency_codes()
+            if currencies:
+                print(f"Fetched {len(currencies)} currencies.")
+                store_currencies(currencies)
+                print(f"Stored {len(currencies)} currencies.")
+            else:
+                print("No currencies fetched. Exiting.")
+                return
         print(f"Calling endpoint: {CURRENCY_RATE_URL}")
         response = requests.get(CURRENCY_RATE_URL)
         response.raise_for_status()
-        currencies = [Currency(**currency.to_dict()) for currency in db.collection("currency").stream()]
         if response.status_code == 200:
             json = response.json()
             currency_rates = parse_currency_rates(json)
