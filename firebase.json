@@ -12,6 +12,7 @@
       "ignore": [
         "venv",
         ".git",
+        "firebase-key.json",
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"

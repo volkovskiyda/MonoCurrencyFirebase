@@ -4,3 +4,6 @@ __pycache__/
 # Python virtual environment
 venv/
 *.local
+
+# Service account key (created by CI, must never be committed)
+firebase-key.json

@@ -34,6 +34,9 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-key.json" >> $GITHUB_ENV
         shell: bash
 
+      - name: Copy credentials to functions directory
+        run: cp $HOME/firebase-key.json functions/firebase-key.json
+
       - name: Create Python venv and install dependencies
         run: |
           cd functions
@@ -48,4 +51,4 @@ jobs:
 
       - name: Remove credentials file
         if: success() || failure()
-        run: rm -f $HOME/firebase-key.json
+        run: rm -f $HOME/firebase-key.json functions/firebase-key.json
