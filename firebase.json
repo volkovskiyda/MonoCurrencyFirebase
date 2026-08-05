@@ -38,8 +38,8 @@
   "remoteconfig": {
     "template": "remoteconfig.template.json"
   },
-  "extensions": {},
   "hosting": {
+    "site": "monocurrency",
     "public": "public",
     "ignore": [
       "firebase.json",

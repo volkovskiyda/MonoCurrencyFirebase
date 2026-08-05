@@ -31,6 +31,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > $HOME/firebase-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-key.json" >> $GITHUB_ENV
         shell: bash
 
       - name: Copy credentials to functions directory
@@ -46,10 +47,8 @@ jobs:
         shell: bash
 
       - name: Deploy to Firebase
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: firebase deploy --token "$FIREBASE_TOKEN" --non-interactive
+        run: firebase deploy --project monocurrency --non-interactive
 
       - name: Remove credentials file
         if: success() || failure()
-        run: rm $HOME/firebase-key.json functions/firebase-key.json
+        run: rm -f $HOME/firebase-key.json functions/firebase-key.json
